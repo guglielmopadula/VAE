@@ -29,7 +29,7 @@ class Decoder(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, input_dimension, latent_dimension,
-                 hidden_dimension):
+                 hidden_dimension,normalize):
         super().__init__()
         self.model = torch.nn.Sequential(
             torch.nn.Linear(input_dimension, hidden_dimension),
@@ -49,15 +49,19 @@ class Encoder(nn.Module):
             nn.BatchNorm1d(latent_dimension),
             torch.nn.Linear(latent_dimension, latent_dimension)
         )
+        self.bn=nn.BatchNorm1d(latent_dimension,affine=False,track_running_stats=False)
+        self.normalize=normalize
     def forward(self, x):   
         mu=self.model(x)
+        if self.normalize:
+            mu=self.bn(mu)
         log_sigma=self.var_est(mu)
         return mu,log_sigma
 
 
 class VAE(nn.Module):
 
-    def __init__(self, input_dimension, hidden_dimension,latent_dimension):
+    def __init__(self, input_dimension, hidden_dimension,latent_dimension,lr,normalize=False):
         super().__init__()
         self.log_scale=nn.Parameter(torch.Tensor([0.0]))
         self.latent_dimension=latent_dimension
@@ -65,9 +69,9 @@ class VAE(nn.Module):
                                     latent_dimension=latent_dimension,hidden_dimension=hidden_dimension)
 
         self.encoder = Encoder(input_dimension=input_dimension,
-                                    latent_dimension=latent_dimension,hidden_dimension=hidden_dimension)
+                                    latent_dimension=latent_dimension,hidden_dimension=hidden_dimension,normalize=normalize)
 
-        self.opt=torch.optim.AdamW(self.parameters(), lr=0.0005)
+        self.opt=torch.optim.AdamW(self.parameters(), lr=lr)
 
     def sample(self, ):
         return self.decoder(torch.randn(1,self.latent_dim))
@@ -102,13 +106,18 @@ class VAE(nn.Module):
     def fit(self,value):
         h=torch.tensor(value).float()
         train = torch.utils.data.TensorDataset(h)
-        train_loader = torch.utils.data.DataLoader(train, batch_size=110, shuffle=True)
+        train_loader = torch.utils.data.DataLoader(train, batch_size=100, shuffle=True)
         self.train(train_loader)    
 
     def reconstruct(self,z):
         z=torch.tensor(z).float()
         self.decoder=self.decoder.eval() 
         return np.array(self.decoder(z).detach())
+
+    def generate_new_dataset(self,NUM_SAMPLES):
+        z=torch.randn(NUM_SAMPLES,self.latent_dimension)
+        values=self.reconstruct(z)
+        return np.array(z),values
 
 
 

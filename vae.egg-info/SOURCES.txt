@@ -1,4 +1,3 @@
-README.md
 setup.py
 vae/__init__.py
 vae/vae.py
